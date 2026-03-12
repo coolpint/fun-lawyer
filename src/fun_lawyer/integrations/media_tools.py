@@ -20,7 +20,12 @@ def parse_timestamp(value: str) -> float:
 
 
 def _run(command: List[str]) -> str:
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    completed = subprocess.run(command, capture_output=True, text=True)
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip()
+        stdout = completed.stdout.strip()
+        details = stderr or stdout or f"exit code {completed.returncode}"
+        raise RuntimeError(f"Command failed: {' '.join(command)}\n{details}")
     return completed.stdout.strip()
 
 
@@ -34,11 +39,13 @@ class MediaTools:
         stdout = _run(
             [
                 self.config.yt_dlp_bin,
+                "--verbose",
                 "--no-playlist",
                 "--merge-output-format",
                 "mp4",
                 "--print",
                 "after_move:filepath",
+                "--force-ipv4",
                 "-o",
                 str(template),
                 youtube_url,
@@ -54,6 +61,7 @@ class MediaTools:
             _run(
                 [
                     self.config.yt_dlp_bin,
+                    "--verbose",
                     "--no-playlist",
                     "--skip-download",
                     "--write-sub",
@@ -62,6 +70,7 @@ class MediaTools:
                     "ko.*,ko,en.*,en",
                     "--convert-subs",
                     "vtt",
+                    "--force-ipv4",
                     "-o",
                     str(template),
                     youtube_url,
