@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..artifacts import write_json, write_text
 from ..config import AppConfig
 from ..db import Repository
 from ..models import JobType
@@ -80,6 +81,12 @@ class TranscriptWorker:
             score=quality.score,
             raw_response=quality.raw_response,
         )
+        self._export_transcript_artifacts(
+            youtube_video_id=video["youtube_video_id"],
+            transcript_payload=transcript_payload,
+            source=source,
+            status=transcript_status,
+        )
         if quality.passed:
             self.repository.enqueue_job(
                 job_type=JobType.BUILD_ARTICLE.value,
@@ -88,3 +95,23 @@ class TranscriptWorker:
                 dedupe_key=f"article:{video_id}",
             )
         return transcript_id
+
+    def _export_transcript_artifacts(
+        self,
+        *,
+        youtube_video_id: str,
+        transcript_payload: dict,
+        source: str,
+        status: str,
+    ) -> None:
+        base_dir = self.config.storage_dir / youtube_video_id
+        write_text(base_dir / "transcript.txt", transcript_payload["text"])
+        write_json(
+            base_dir / "transcript.json",
+            {
+                "source": source,
+                "status": status,
+                "language": transcript_payload.get("language"),
+                "segments": transcript_payload["segments"],
+            },
+        )

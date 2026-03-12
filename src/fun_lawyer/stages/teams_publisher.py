@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from ..artifacts import write_json
 from ..config import AppConfig
 from ..db import Repository, utc_now
 from ..qa_agent import QualityAgent
@@ -43,6 +44,7 @@ class TeamsPublisher:
             raw_response=quality.raw_response,
         )
         if not quality.passed:
+            self._export_delivery_payload(video["youtube_video_id"], card, delivery_status)
             self.repository.save_delivery(
                 article_id=article_id,
                 destination="teams",
@@ -55,6 +57,7 @@ class TeamsPublisher:
             return article_id
 
         external_id = self.teams_client.post(card)
+        self._export_delivery_payload(video["youtube_video_id"], card, "success")
         self.repository.save_delivery(
             article_id=article_id,
             destination="teams",
@@ -65,3 +68,13 @@ class TeamsPublisher:
             sent_at=utc_now(),
         )
         return article_id
+
+    def _export_delivery_payload(self, youtube_video_id: str, payload: dict, status: str) -> None:
+        base_dir = self.config.storage_dir / youtube_video_id
+        write_json(
+            base_dir / "delivery.teams.json",
+            {
+                "status": status,
+                "payload": payload,
+            },
+        )

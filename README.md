@@ -11,6 +11,8 @@ The current scaffold separates the work into four workers:
 
 Each stage is reviewed by `qa_agent` before the next stage can continue. Failures stay isolated inside the stage that produced them.
 
+For GitHub Actions runs, persistent state lives under `state/` so the runner can pick up where the last run stopped.
+
 ## Setup
 
 1. Create a virtual environment.
@@ -54,8 +56,25 @@ fun-lawyer show-status
 
 See `.env.example`.
 
+## GitHub Actions
+
+The repository includes `.github/workflows/run-fun-lawyer.yml`, which runs hourly and can also be triggered manually.
+
+Expected repository secrets:
+
+- `YOUTUBE_API_KEY`
+- `OPENAI_API_KEY`
+- `TEAMS_WEBHOOK_URL`
+- `APP_PUBLIC_MEDIA_BASE_URL` (optional override)
+- `OPENAI_ARTICLE_MODEL` (optional override)
+- `OPENAI_QA_MODEL` (optional override)
+- `OPENAI_TRANSCRIBE_MODEL` (optional override)
+
+The workflow stores its SQLite database and generated article assets in `state/`, commits them to `main`, then sends Teams messages after the capture images are reachable at their final public URLs.
+
 ## Notes
 
 - Teams incoming webhooks can render image URLs, not local file paths.
 - The publisher therefore expects each capture to have a `public_url` before it can pass preflight QA.
 - The current scaffold is ready for a scheduler, but it only ships a `run-once` CLI for now.
+- If you do not set `APP_PUBLIC_MEDIA_BASE_URL`, the workflow falls back to GitHub raw URLs under `state/storage`. That works only if the repo path is publicly reachable from Teams.

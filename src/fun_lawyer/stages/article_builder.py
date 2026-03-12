@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from ..artifacts import write_json, write_text
 from ..config import AppConfig
 from ..db import Repository
 from ..models import JobType
@@ -75,6 +76,15 @@ class ArticleBuilder:
             score=quality.score,
             raw_response=quality.raw_response,
         )
+        self._export_article_artifacts(
+            youtube_video_id=video["youtube_video_id"],
+            headline=article_payload["headline"],
+            summary=article_payload["summary"],
+            body=article_payload["body"],
+            sources=article_payload["sources"],
+            captures=captures,
+            status=article_status,
+        )
         if quality.passed:
             self.repository.enqueue_job(
                 job_type=JobType.PUBLISH_TEAMS.value,
@@ -106,3 +116,37 @@ class ArticleBuilder:
             return None
         relative = path.relative_to(self.config.storage_dir).as_posix()
         return f"{self.config.public_media_base_url.rstrip('/')}/{relative}"
+
+    def _export_article_artifacts(
+        self,
+        *,
+        youtube_video_id: str,
+        headline: str,
+        summary: str,
+        body: str,
+        sources: List[Dict[str, Any]],
+        captures: List[Dict[str, Any]],
+        status: str,
+    ) -> None:
+        base_dir = self.config.storage_dir / youtube_video_id
+        markdown = "\n".join(
+            [
+                f"# {headline}",
+                "",
+                summary,
+                "",
+                body,
+            ]
+        ).strip() + "\n"
+        write_text(base_dir / "article.md", markdown)
+        write_json(
+            base_dir / "article.json",
+            {
+                "headline": headline,
+                "summary": summary,
+                "body": body,
+                "sources": sources,
+                "captures": captures,
+                "status": status,
+            },
+        )
