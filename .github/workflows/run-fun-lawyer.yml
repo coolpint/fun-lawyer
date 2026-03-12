@@ -25,16 +25,18 @@ jobs:
       OPENAI_ARTICLE_MODEL: ${{ secrets.OPENAI_ARTICLE_MODEL != '' && secrets.OPENAI_ARTICLE_MODEL || 'gpt-5' }}
       OPENAI_QA_MODEL: ${{ secrets.OPENAI_QA_MODEL != '' && secrets.OPENAI_QA_MODEL || 'gpt-5-mini' }}
       OPENAI_TRANSCRIBE_MODEL: ${{ secrets.OPENAI_TRANSCRIBE_MODEL != '' && secrets.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe' }}
+      LOCAL_TRANSCRIBE_MODEL: ${{ secrets.LOCAL_TRANSCRIBE_MODEL != '' && secrets.LOCAL_TRANSCRIBE_MODEL || 'small' }}
+      LOCAL_TRANSCRIBE_COMPUTE_TYPE: ${{ secrets.LOCAL_TRANSCRIBE_COMPUTE_TYPE != '' && secrets.LOCAL_TRANSCRIBE_COMPUTE_TYPE || 'int8' }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -46,12 +48,21 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install . yt-dlp
+          python -m pip install . yt-dlp faster-whisper
+
+      - name: Cache local transcription models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/whisper
+          key: fun-lawyer-whisper-${{ runner.os }}-${{ env.LOCAL_TRANSCRIBE_MODEL }}
+          restore-keys: |
+            fun-lawyer-whisper-${{ runner.os }}-
 
       - name: Validate secrets
         run: |
           test -n "$YOUTUBE_API_KEY" || { echo "::error::YOUTUBE_API_KEY secret is missing"; exit 1; }
-          test -n "$OPENAI_API_KEY" || { echo "::error::OPENAI_API_KEY secret is missing"; exit 1; }
           test -n "$TEAMS_WEBHOOK_URL" || { echo "::error::TEAMS_WEBHOOK_URL secret is missing"; exit 1; }
 
       - name: Prepare tracked state directory

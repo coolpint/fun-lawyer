@@ -20,6 +20,8 @@ class QualityAgentTest(unittest.TestCase):
             openai_article_model="gpt-5",
             openai_qa_model="gpt-5-mini",
             openai_transcribe_model="gpt-4o-transcribe",
+            local_transcribe_model="small",
+            local_transcribe_compute_type="int8",
             teams_webhook_url="https://example.com/webhook",
             yt_dlp_bin="yt-dlp",
             ffmpeg_bin="ffmpeg",

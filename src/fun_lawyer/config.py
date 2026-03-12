@@ -31,6 +31,8 @@ class AppConfig:
     openai_article_model: str
     openai_qa_model: str
     openai_transcribe_model: str
+    local_transcribe_model: str
+    local_transcribe_compute_type: str
     teams_webhook_url: str | None
     yt_dlp_bin: str
     ffmpeg_bin: str
@@ -56,6 +58,8 @@ class AppConfig:
             openai_article_model=os.getenv("OPENAI_ARTICLE_MODEL", "gpt-5"),
             openai_qa_model=os.getenv("OPENAI_QA_MODEL", "gpt-5-mini"),
             openai_transcribe_model=os.getenv("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe"),
+            local_transcribe_model=os.getenv("LOCAL_TRANSCRIBE_MODEL", "small"),
+            local_transcribe_compute_type=os.getenv("LOCAL_TRANSCRIBE_COMPUTE_TYPE", "int8"),
             teams_webhook_url=os.getenv("TEAMS_WEBHOOK_URL") or None,
             yt_dlp_bin=os.getenv("YT_DLP_BIN", "yt-dlp"),
             ffmpeg_bin=os.getenv("FFMPEG_BIN", "ffmpeg"),

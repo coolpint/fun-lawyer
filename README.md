@@ -63,12 +63,14 @@ The repository includes `.github/workflows/run-fun-lawyer.yml`, which runs hourl
 Expected repository secrets:
 
 - `YOUTUBE_API_KEY`
-- `OPENAI_API_KEY`
 - `TEAMS_WEBHOOK_URL`
 - `APP_PUBLIC_MEDIA_BASE_URL` (optional override)
+- `OPENAI_API_KEY` (optional)
 - `OPENAI_ARTICLE_MODEL` (optional override)
 - `OPENAI_QA_MODEL` (optional override)
 - `OPENAI_TRANSCRIBE_MODEL` (optional override)
+- `LOCAL_TRANSCRIBE_MODEL` (optional override)
+- `LOCAL_TRANSCRIBE_COMPUTE_TYPE` (optional override)
 
 The workflow stores its SQLite database and generated article assets in `state/`, commits them to `main`, then sends Teams messages after the capture images are reachable at their final public URLs.
 
@@ -78,3 +80,4 @@ The workflow stores its SQLite database and generated article assets in `state/`
 - The publisher therefore expects each capture to have a `public_url` before it can pass preflight QA.
 - The current scaffold is ready for a scheduler, but it only ships a `run-once` CLI for now.
 - If you do not set `APP_PUBLIC_MEDIA_BASE_URL`, the workflow falls back to GitHub raw URLs under `state/storage`. That works only if the repo path is publicly reachable from Teams.
+- If `OPENAI_API_KEY` is missing, the pipeline falls back to local transcription with `faster-whisper` and a rule-based article writer. Quality is lower than the OpenAI path, but the workflow still runs.
