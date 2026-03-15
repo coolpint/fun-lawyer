@@ -24,6 +24,7 @@ class LocalArticleBuilderTest(unittest.TestCase):
             local_transcribe_compute_type="int8",
             teams_webhook_url=None,
             yt_dlp_bin="yt-dlp",
+            yt_dlp_cookies_path=None,
             ffmpeg_bin="ffmpeg",
             ffprobe_bin="ffprobe",
         )

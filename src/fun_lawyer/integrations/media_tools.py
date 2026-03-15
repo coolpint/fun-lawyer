@@ -33,24 +33,29 @@ class MediaTools:
     def __init__(self, config: AppConfig):
         self.config = config
 
+    def _yt_dlp_base_command(self) -> List[str]:
+        command = [self.config.yt_dlp_bin, "--verbose", "--force-ipv4"]
+        if self.config.yt_dlp_cookies_path:
+            command.extend(["--cookies", self.config.yt_dlp_cookies_path])
+        return command
+
     def download_video(self, youtube_url: str, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
         template = output_dir / "%(id)s.%(ext)s"
-        stdout = _run(
+        command = self._yt_dlp_base_command()
+        command.extend(
             [
-                self.config.yt_dlp_bin,
-                "--verbose",
                 "--no-playlist",
                 "--merge-output-format",
                 "mp4",
                 "--print",
                 "after_move:filepath",
-                "--force-ipv4",
                 "-o",
                 str(template),
                 youtube_url,
             ]
         )
+        stdout = _run(command)
         video_path = Path(stdout.splitlines()[-1].strip())
         return video_path
 
@@ -58,10 +63,9 @@ class MediaTools:
         output_dir.mkdir(parents=True, exist_ok=True)
         template = output_dir / "%(id)s.%(ext)s"
         try:
-            _run(
+            command = self._yt_dlp_base_command()
+            command.extend(
                 [
-                    self.config.yt_dlp_bin,
-                    "--verbose",
                     "--no-playlist",
                     "--skip-download",
                     "--write-sub",
@@ -70,13 +74,13 @@ class MediaTools:
                     "ko.*,ko,en.*,en",
                     "--convert-subs",
                     "vtt",
-                    "--force-ipv4",
                     "-o",
                     str(template),
                     youtube_url,
                 ]
             )
-        except subprocess.CalledProcessError:
+            _run(command)
+        except RuntimeError:
             return None
 
         candidates = sorted(output_dir.glob(f"{video_id}*.vtt"))

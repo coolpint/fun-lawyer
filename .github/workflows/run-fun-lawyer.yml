@@ -28,6 +28,7 @@ jobs:
       LOCAL_TRANSCRIBE_MODEL: ${{ secrets.LOCAL_TRANSCRIBE_MODEL != '' && secrets.LOCAL_TRANSCRIBE_MODEL || 'small' }}
       LOCAL_TRANSCRIBE_COMPUTE_TYPE: ${{ secrets.LOCAL_TRANSCRIBE_COMPUTE_TYPE != '' && secrets.LOCAL_TRANSCRIBE_COMPUTE_TYPE || 'int8' }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      YT_DLP_COOKIES_PATH: ${{ runner.temp }}/yt-dlp-cookies.txt
 
     steps:
       - name: Checkout
@@ -79,6 +80,16 @@ jobs:
       - name: Prepare tracked state directory
         run: |
           mkdir -p state/storage
+
+      - name: Prepare yt-dlp cookies
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.YT_DLP_COOKIES_B64 }}" ]; then
+            echo "No yt-dlp cookies secret configured."
+            exit 0
+          fi
+          echo "${{ secrets.YT_DLP_COOKIES_B64 }}" | base64 -d > "$YT_DLP_COOKIES_PATH"
+          chmod 600 "$YT_DLP_COOKIES_PATH"
 
       - name: Run tests
         run: python -m unittest discover -s tests

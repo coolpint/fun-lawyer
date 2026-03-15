@@ -71,6 +71,7 @@ Expected repository secrets:
 - `OPENAI_TRANSCRIBE_MODEL` (optional override)
 - `LOCAL_TRANSCRIBE_MODEL` (optional override)
 - `LOCAL_TRANSCRIBE_COMPUTE_TYPE` (optional override)
+- `YT_DLP_COOKIES_B64` (optional, recommended on GitHub-hosted runners)
 
 The workflow stores its SQLite database and generated article assets in `state/`, commits them to `main`, then sends Teams messages after the capture images are reachable at their final public URLs.
 
@@ -81,3 +82,4 @@ The workflow stores its SQLite database and generated article assets in `state/`
 - The current scaffold is ready for a scheduler, but it only ships a `run-once` CLI for now.
 - If you do not set `APP_PUBLIC_MEDIA_BASE_URL`, the workflow falls back to GitHub raw URLs under `state/storage`. That works only if the repo path is publicly reachable from Teams.
 - If `OPENAI_API_KEY` is missing, the pipeline falls back to local transcription with `faster-whisper` and a rule-based article writer. Quality is lower than the OpenAI path, but the workflow still runs.
+- GitHub-hosted runners are often rate-limited by YouTube. If downloads fail with `HTTP Error 429` or `Sign in to confirm you’re not a bot`, add a `YT_DLP_COOKIES_B64` secret containing a base64-encoded Netscape-format cookies file, or move the workflow to a self-hosted runner.
