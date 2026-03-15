@@ -40,10 +40,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up Deno for yt-dlp
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Install Deno for yt-dlp
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh -s -- -y
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
         run: |
