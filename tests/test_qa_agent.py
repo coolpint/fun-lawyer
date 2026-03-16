@@ -25,6 +25,7 @@ class QualityAgentTest(unittest.TestCase):
             teams_webhook_url="https://example.com/webhook",
             yt_dlp_bin="yt-dlp",
             yt_dlp_cookies_path=None,
+            yt_dlp_cookies_from_browser=None,
             ffmpeg_bin="ffmpeg",
             ffprobe_bin="ffprobe",
         )
@@ -47,21 +48,19 @@ class QualityAgentTest(unittest.TestCase):
         self.assertIn("banned_phrase", codes)
         self.assertIn("capture_count_invalid", codes)
 
-    def test_delivery_review_requires_public_image_urls(self) -> None:
+    def test_delivery_review_accepts_local_capture_files(self) -> None:
         result = self.agent.review_delivery(
             {
                 "webhook_url": "https://example.com/webhook",
                 "card": {"type": "message"},
                 "captures": [
-                    {"path": "/tmp/1.jpg", "public_url": "https://cdn.example.com/1.jpg"},
+                    {"path": "/tmp/1.jpg"},
                     {"path": "/tmp/2.jpg"},
-                    {"path": "/tmp/3.jpg", "public_url": "https://cdn.example.com/3.jpg"},
+                    {"path": "/tmp/3.jpg"},
                 ],
             }
         )
-        self.assertFalse(result.passed)
-        codes = {finding.code for finding in result.findings}
-        self.assertIn("public_url_missing", codes)
+        self.assertTrue(result.passed)
 
     def test_transcript_review_accepts_complete_payload(self) -> None:
         result = self.agent.review_transcript(

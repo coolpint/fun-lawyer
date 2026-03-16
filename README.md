@@ -11,8 +11,6 @@ The current scaffold separates the work into four workers:
 
 Each stage is reviewed by `qa_agent` before the next stage can continue. Failures stay isolated inside the stage that produced them.
 
-For GitHub Actions runs, persistent state lives under `state/` so the runner can pick up where the last run stopped.
-
 ## Setup
 
 1. Create a virtual environment.
@@ -22,7 +20,9 @@ For GitHub Actions runs, persistent state lives under `state/` so the runner can
    - `yt-dlp`
    - `ffmpeg`
    - `ffprobe`
-5. If you want capture images to appear in Teams, expose `APP_STORAGE_DIR` through a public HTTPS base URL and set `APP_PUBLIC_MEDIA_BASE_URL`.
+5. If you do not use `OPENAI_API_KEY`, install `faster-whisper`.
+6. If YouTube blocks downloads on your machine, set either `YT_DLP_COOKIES_PATH` or `YT_DLP_COOKIES_FROM_BROWSER`.
+7. If you want capture images to render inside Teams, expose `APP_STORAGE_DIR` through a public HTTPS base URL and set `APP_PUBLIC_MEDIA_BASE_URL`.
 
 ## Commands
 
@@ -36,6 +36,12 @@ Run one full pass:
 
 ```bash
 fun-lawyer run-once
+```
+
+Run the local worker loop:
+
+```bash
+fun-lawyer run-loop --interval-sec 900
 ```
 
 Run a single stage worker:
@@ -56,30 +62,10 @@ fun-lawyer show-status
 
 See `.env.example`.
 
-## GitHub Actions
-
-The repository includes `.github/workflows/run-fun-lawyer.yml`, which runs hourly and can also be triggered manually.
-
-Expected repository secrets:
-
-- `YOUTUBE_API_KEY`
-- `TEAMS_WEBHOOK_URL`
-- `APP_PUBLIC_MEDIA_BASE_URL` (optional override)
-- `OPENAI_API_KEY` (optional)
-- `OPENAI_ARTICLE_MODEL` (optional override)
-- `OPENAI_QA_MODEL` (optional override)
-- `OPENAI_TRANSCRIBE_MODEL` (optional override)
-- `LOCAL_TRANSCRIBE_MODEL` (optional override)
-- `LOCAL_TRANSCRIBE_COMPUTE_TYPE` (optional override)
-- `YT_DLP_COOKIES_B64` (optional, recommended on GitHub-hosted runners)
-
-The workflow stores its SQLite database and generated article assets in `state/`, commits them to `main`, then sends Teams messages after the capture images are reachable at their final public URLs.
-
 ## Notes
 
-- Teams incoming webhooks can render image URLs, not local file paths.
-- The publisher therefore expects each capture to have a `public_url` before it can pass preflight QA.
-- The current scaffold is ready for a scheduler, but it only ships a `run-once` CLI for now.
-- If you do not set `APP_PUBLIC_MEDIA_BASE_URL`, the workflow falls back to GitHub raw URLs under `state/storage`. That works only if the repo path is publicly reachable from Teams.
-- If `OPENAI_API_KEY` is missing, the pipeline falls back to local transcription with `faster-whisper` and a rule-based article writer. Quality is lower than the OpenAI path, but the workflow still runs.
-- GitHub-hosted runners are often rate-limited by YouTube. If downloads fail with `HTTP Error 429` or `Sign in to confirm you’re not a bot`, add a `YT_DLP_COOKIES_B64` secret containing a base64-encoded Netscape-format cookies file, or move the workflow to a self-hosted runner.
+- Default local state lives under `.data/`. GitHub 저장소를 상태 저장소로 쓰지 않는다.
+- Teams incoming webhook은 로컬 파일 경로를 직접 렌더링하지 못한다. 그래서 `APP_PUBLIC_MEDIA_BASE_URL`이 없으면 기사 본문은 전송되지만 캡처 이미지는 카드에서 생략된다.
+- 캡처 3장은 항상 로컬에 저장된다. 나중에 공개 URL만 연결하면 같은 구조로 Teams 카드에 붙일 수 있다.
+- `OPENAI_API_KEY`가 없으면 전사는 `faster-whisper`, 기사 작성은 규칙 기반 fallback으로 처리한다.
+- `YT_DLP_COOKIES_FROM_BROWSER=chrome` 같은 값으로 로컬 브라우저 쿠키를 직접 읽게 할 수 있다.

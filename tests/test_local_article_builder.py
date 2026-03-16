@@ -25,6 +25,7 @@ class LocalArticleBuilderTest(unittest.TestCase):
             teams_webhook_url=None,
             yt_dlp_bin="yt-dlp",
             yt_dlp_cookies_path=None,
+            yt_dlp_cookies_from_browser=None,
             ffmpeg_bin="ffmpeg",
             ffprobe_bin="ffprobe",
         )

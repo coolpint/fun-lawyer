@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from collections import Counter
 
 from .config import AppConfig
@@ -53,6 +54,10 @@ def parse_args() -> argparse.Namespace:
     run_once = subparsers.add_parser("run-once")
     run_once.add_argument("--max-results", type=int, default=5)
 
+    run_loop = subparsers.add_parser("run-loop")
+    run_loop.add_argument("--max-results", type=int, default=5)
+    run_loop.add_argument("--interval-sec", type=int, default=900)
+
     subparsers.add_parser("show-status")
     return parser.parse_args()
 
@@ -100,6 +105,19 @@ def print_status(services) -> None:
     print("jobs:", dict(job_counter))
 
 
+def run_once_cycle(services, max_results: int) -> tuple[int, int]:
+    repository = services["repository"]
+    created = services["youtube_watcher"].scan(max_results=max_results)
+    processed = 0
+    while True:
+        job = repository.claim_next_job()
+        if not job:
+            break
+        dispatch_job(services, job)
+        processed += 1
+    return created, processed
+
+
 def main() -> None:
     args = parse_args()
     services = build_services()
@@ -126,15 +144,18 @@ def main() -> None:
         return
 
     if args.command == "run-once":
-        created = services["youtube_watcher"].scan(max_results=args.max_results)
-        processed = 0
-        while True:
-            job = repository.claim_next_job()
-            if not job:
-                break
-            dispatch_job(services, job)
-            processed += 1
+        created, processed = run_once_cycle(services, args.max_results)
         print(f"queued {created} new videos and processed {processed} jobs")
+        return
+
+    if args.command == "run-loop":
+        try:
+            while True:
+                created, processed = run_once_cycle(services, args.max_results)
+                print(f"queued {created} new videos and processed {processed} jobs")
+                time.sleep(args.interval_sec)
+        except KeyboardInterrupt:
+            print("stopped")
         return
 
     if args.command == "show-status":

@@ -72,11 +72,11 @@ class QualityAgent:
             findings.append(QualityFinding(code="card_missing", message="Teams 카드 payload가 없다."))
         if len(captures) != 3:
             findings.append(QualityFinding(code="captures_missing", message="Teams 송출 전 캡처 3개가 준비돼야 한다."))
-        elif any(not capture.get("public_url") for capture in captures):
+        elif any(not capture.get("path") for capture in captures):
             findings.append(
                 QualityFinding(
-                    code="public_url_missing",
-                    message="Teams incoming webhook에는 공개 이미지 URL이 필요하다.",
+                    code="capture_path_missing",
+                    message="캡처 파일 경로가 비어 있다.",
                 )
             )
         result = self._maybe_llm_review("delivery", payload, findings)

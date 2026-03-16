@@ -37,6 +37,8 @@ class MediaTools:
         command = [self.config.yt_dlp_bin, "--verbose", "--force-ipv4"]
         if self.config.yt_dlp_cookies_path:
             command.extend(["--cookies", self.config.yt_dlp_cookies_path])
+        elif self.config.yt_dlp_cookies_from_browser:
+            command.extend(["--cookies-from-browser", self.config.yt_dlp_cookies_from_browser])
         return command
 
     def download_video(self, youtube_url: str, output_dir: Path) -> Path:

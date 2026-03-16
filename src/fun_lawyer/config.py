@@ -36,6 +36,7 @@ class AppConfig:
     teams_webhook_url: str | None
     yt_dlp_bin: str
     yt_dlp_cookies_path: str | None
+    yt_dlp_cookies_from_browser: str | None
     ffmpeg_bin: str
     ffprobe_bin: str
 
@@ -64,6 +65,7 @@ class AppConfig:
             teams_webhook_url=os.getenv("TEAMS_WEBHOOK_URL") or None,
             yt_dlp_bin=os.getenv("YT_DLP_BIN", "yt-dlp"),
             yt_dlp_cookies_path=os.getenv("YT_DLP_COOKIES_PATH") or None,
+            yt_dlp_cookies_from_browser=os.getenv("YT_DLP_COOKIES_FROM_BROWSER") or None,
             ffmpeg_bin=os.getenv("FFMPEG_BIN", "ffmpeg"),
             ffprobe_bin=os.getenv("FFPROBE_BIN", "ffprobe"),
         )

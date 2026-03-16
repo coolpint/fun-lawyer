@@ -5,9 +5,4 @@ __pycache__/
 build/
 dist/
 *.egg-info/
-state/storage/**/*.mp4
-state/storage/**/*.m4a
-state/storage/**/*.wav
-state/storage/**/*.webm
-state/storage/**/*.vtt
-state/storage/**/*.part
+state/
