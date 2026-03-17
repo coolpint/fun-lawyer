@@ -64,6 +64,9 @@ class MediaTools:
     def download_subtitles(self, youtube_url: str, output_dir: Path, video_id: str) -> Path | None:
         output_dir.mkdir(parents=True, exist_ok=True)
         template = output_dir / "%(id)s.%(ext)s"
+        candidates = sorted(output_dir.glob(f"{video_id}*.vtt"))
+        if candidates:
+            return candidates[0]
         try:
             command = self._yt_dlp_base_command()
             command.extend(
@@ -83,7 +86,8 @@ class MediaTools:
             )
             _run(command)
         except RuntimeError:
-            return None
+            candidates = sorted(output_dir.glob(f"{video_id}*.vtt"))
+            return candidates[0] if candidates else None
 
         candidates = sorted(output_dir.glob(f"{video_id}*.vtt"))
         return candidates[0] if candidates else None

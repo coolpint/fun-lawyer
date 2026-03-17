@@ -27,7 +27,6 @@ class ArticleBuilder:
         if not video["local_video_path"]:
             raise RuntimeError(f"Local video path missing for video_id={video_id}")
 
-        self.repository.set_entity_status("transcripts", transcript["id"], "running")
         transcript_payload = {
             "text": transcript["text"],
             "segments": json.loads(transcript["segments_json"]),

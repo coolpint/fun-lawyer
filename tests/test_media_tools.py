@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fun_lawyer.config import AppConfig
 from fun_lawyer.integrations.media_tools import MediaTools
@@ -52,6 +53,24 @@ class MediaToolsCommandTest(unittest.TestCase):
         command = tools._yt_dlp_base_command()
         self.assertIn("--cookies-from-browser", command)
         self.assertIn("chrome", command)
+
+    def test_reuses_existing_subtitle_file_before_network_call(self) -> None:
+        config = AppConfig(
+            **self.base_kwargs,
+            yt_dlp_cookies_path=None,
+            yt_dlp_cookies_from_browser=None,
+        )
+        tools = MediaTools(config)
+        output_dir = Path(self.temp_dir.name) / "subs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        subtitle_path = output_dir / "abc123.ko.vtt"
+        subtitle_path.write_text("WEBVTT\n", encoding="utf-8")
+
+        with patch("fun_lawyer.integrations.media_tools._run") as mock_run:
+            result = tools.download_subtitles("https://youtube.com/watch?v=abc123", output_dir, "abc123")
+
+        self.assertEqual(subtitle_path, result)
+        mock_run.assert_not_called()
 
 
 if __name__ == "__main__":
