@@ -34,26 +34,20 @@ class TeamsWebhookClientTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_build_article_card_skips_non_public_images(self) -> None:
-        payload = self.client.build_article_card(
-            article={
-                "headline": "기사 제목",
-                "summary": "요약",
-                "body": "본문",
-                "captures": [
-                    {"path": "/tmp/a.jpg", "note": "장면 1"},
-                    {"path": "/tmp/b.jpg", "note": "장면 2"},
-                    {"path": "/tmp/c.jpg", "note": "장면 3"},
-                ],
+    def test_build_document_cards_splits_body_and_appends_link(self) -> None:
+        payloads = self.client.build_document_cards(
+            document={
+                "headline": "문서 제목",
+                "body": ("첫 문단입니다. " * 250) + "\n\n" + ("둘째 문단입니다. " * 250),
             },
             video={
                 "title": "영상 제목",
                 "youtube_url": "https://www.youtube.com/watch?v=abc123",
             },
         )
-        body = payload["attachments"][0]["content"]["body"]
-        image_blocks = [item for item in body if item["type"] == "Image"]
-        self.assertEqual([], image_blocks)
+        self.assertGreaterEqual(len(payloads), 2)
+        last_body = payloads[-1]["attachments"][0]["content"]["body"]
+        self.assertIn("링크\nhttps://www.youtube.com/watch?v=abc123", last_body[-1]["text"])
 
 
 if __name__ == "__main__":

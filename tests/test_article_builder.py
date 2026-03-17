@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 
 from fun_lawyer.config import AppConfig
 from fun_lawyer.models import QualityResult
-from fun_lawyer.stages.article_builder import ArticleBuilder
+from fun_lawyer.stages.article_builder import DocumentBuilder
 
 
-class ArticleBuilderTest(unittest.TestCase):
+class DocumentBuilderTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         base = Path(self.temp_dir.name)
@@ -35,7 +35,7 @@ class ArticleBuilderTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_process_does_not_reopen_transcript_status(self) -> None:
+    def test_process_builds_script_document_without_touching_transcript_status(self) -> None:
         repository = MagicMock()
         repository.get_video.return_value = {
             "id": 17,
@@ -48,34 +48,21 @@ class ArticleBuilderTest(unittest.TestCase):
         }
         repository.get_transcript.return_value = {
             "id": 1,
-            "text": "전사 본문",
-            "segments_json": '[{"start_sec": 1, "end_sec": 2, "text": "전사 본문"}]',
+            "text": "첫 문장입니다.\n둘째 문장입니다.",
+            "segments_json": '[{"start_sec": 1, "end_sec": 2, "text": "첫 문장입니다."}, {"start_sec": 3, "end_sec": 4, "text": "둘째 문장입니다."}]',
         }
         repository.save_article.side_effect = [1, 1]
 
-        media_tools = MagicMock()
-        media_tools.capture_frame.side_effect = lambda _video_path, _timestamp, output_path: output_path
-
-        openai_service = MagicMock()
-        openai_service.build_article_package.return_value = {
-            "headline": "기사 제목",
-            "summary": "기사 요약",
-            "body": "기사 본문",
-            "sources": [{"title": "원문", "url": "https://example.com", "note": "원문 영상"}],
-            "captures": [
-                {"timestamp_sec": 10, "note": "장면 1"},
-                {"timestamp_sec": 20, "note": "장면 2"},
-                {"timestamp_sec": 30, "note": "장면 3"},
-            ],
-        }
-
         qa_agent = MagicMock()
-        qa_agent.review_article.return_value = QualityResult(stage="article", passed=True, findings=[], score=1.0)
+        qa_agent.review_document.return_value = QualityResult(stage="document", passed=True, findings=[], score=1.0)
 
-        builder = ArticleBuilder(self.config, repository, media_tools, openai_service, qa_agent)
+        builder = DocumentBuilder(self.config, repository, MagicMock(), MagicMock(), qa_agent)
         builder.process(17)
 
         repository.set_entity_status.assert_not_called()
+        save_call = repository.save_article.call_args_list[0]
+        self.assertEqual("샘플 영상", save_call.kwargs["headline"])
+        self.assertEqual([], save_call.kwargs["captures"])
 
 
 if __name__ == "__main__":

@@ -34,30 +34,25 @@ class QualityAgentTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_article_review_rejects_banned_phrase_and_missing_captures(self) -> None:
-        result = self.agent.review_article(
+    def test_document_review_requires_title_body_and_link(self) -> None:
+        result = self.agent.review_document(
             {
-                "headline": "기사 제목",
-                "summary": "요약",
-                "body": "이 문장은 방증하는 표현을 포함한다.",
-                "captures": [{"path": "/tmp/one.jpg"}],
+                "title": "",
+                "body": "짧다",
+                "source_url": "",
             }
         )
         self.assertFalse(result.passed)
         codes = {finding.code for finding in result.findings}
-        self.assertIn("banned_phrase", codes)
-        self.assertIn("capture_count_invalid", codes)
+        self.assertIn("title_missing", codes)
+        self.assertIn("body_too_short", codes)
+        self.assertIn("source_url_missing", codes)
 
-    def test_delivery_review_accepts_local_capture_files(self) -> None:
+    def test_delivery_review_accepts_card_list(self) -> None:
         result = self.agent.review_delivery(
             {
                 "webhook_url": "https://example.com/webhook",
-                "card": {"type": "message"},
-                "captures": [
-                    {"path": "/tmp/1.jpg"},
-                    {"path": "/tmp/2.jpg"},
-                    {"path": "/tmp/3.jpg"},
-                ],
+                "cards": [{"type": "message"}],
             }
         )
         self.assertTrue(result.passed)

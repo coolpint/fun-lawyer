@@ -15,6 +15,7 @@ class EntityStatus(str, Enum):
 
 class JobType(str, Enum):
     TRANSCRIBE = "transcribe"
+    BUILD_DOCUMENT = "build_document"
     BUILD_ARTICLE = "build_article"
     PUBLISH_TEAMS = "publish_teams"
 

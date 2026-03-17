@@ -16,27 +16,25 @@ class TeamsPublisher:
         self.qa_agent = qa_agent
 
     def process(self, article_id: int) -> int:
-        article = self.repository.get_article_by_id(article_id)
-        if not article:
-            raise RuntimeError(f"Article not found: {article_id}")
-        video = self.repository.get_video(int(article["video_id"]))
+        document = self.repository.get_article_by_id(article_id)
+        if not document:
+            raise RuntimeError(f"Document not found: {article_id}")
+        video = self.repository.get_video(int(document["video_id"]))
         if not video:
-            raise RuntimeError(f"Video not found for article: {article_id}")
+            raise RuntimeError(f"Video not found for document: {article_id}")
 
-        article_payload = dict(article)
-        article_payload["captures"] = json.loads(article["captures_json"])
-        card = self.teams_client.build_article_card(article=article_payload, video=dict(video))
+        document_payload = dict(document)
+        cards = self.teams_client.build_document_cards(document=document_payload, video=dict(video))
         quality = self.qa_agent.review_delivery(
             {
                 "webhook_url": self.config.teams_webhook_url,
-                "card": card,
-                "captures": article_payload["captures"],
+                "cards": cards,
             }
         )
         delivery_status = quality.status()
         self.repository.save_quality_check(
             stage="teams_publisher.preflight",
-            entity_type="article",
+            entity_type="document",
             entity_id=article_id,
             status=delivery_status,
             findings=[finding.to_dict() for finding in quality.findings],
@@ -44,37 +42,37 @@ class TeamsPublisher:
             raw_response=quality.raw_response,
         )
         if not quality.passed:
-            self._export_delivery_payload(video["youtube_video_id"], card, delivery_status)
+            self._export_delivery_payload(video["youtube_video_id"], cards, delivery_status)
             self.repository.save_delivery(
                 article_id=article_id,
                 destination="teams",
                 provider="incoming_webhook",
                 external_id=None,
-                payload=card,
+                payload={"cards": cards},
                 status=delivery_status,
                 last_error="Preflight failed",
             )
             return article_id
 
-        external_id = self.teams_client.post(card)
-        self._export_delivery_payload(video["youtube_video_id"], card, "success")
+        external_ids = [self.teams_client.post(card) for card in cards]
+        self._export_delivery_payload(video["youtube_video_id"], cards, "success")
         self.repository.save_delivery(
             article_id=article_id,
             destination="teams",
             provider="incoming_webhook",
-            external_id=external_id,
-            payload=card,
+            external_id=",".join(filter(None, external_ids)) or str(len(cards)),
+            payload={"cards": cards},
             status="success",
             sent_at=utc_now(),
         )
         return article_id
 
-    def _export_delivery_payload(self, youtube_video_id: str, payload: dict, status: str) -> None:
+    def _export_delivery_payload(self, youtube_video_id: str, cards: list[dict], status: str) -> None:
         base_dir = self.config.storage_dir / youtube_video_id
         write_json(
             base_dir / "delivery.teams.json",
             {
                 "status": status,
-                "payload": payload,
+                "cards": cards,
             },
         )

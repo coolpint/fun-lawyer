@@ -11,12 +11,10 @@ from ..models import JobType
 from ..qa_agent import QualityAgent
 
 
-class ArticleBuilder:
+class DocumentBuilder:
     def __init__(self, config: AppConfig, repository: Repository, media_tools, openai_service, qa_agent: QualityAgent):
         self.config = config
         self.repository = repository
-        self.media_tools = media_tools
-        self.openai_service = openai_service
         self.qa_agent = qa_agent
 
     def process(self, video_id: int) -> int:
@@ -24,128 +22,140 @@ class ArticleBuilder:
         transcript = self.repository.get_transcript(video_id)
         if not video or not transcript:
             raise RuntimeError(f"Video or transcript missing for video_id={video_id}")
-        if not video["local_video_path"]:
-            raise RuntimeError(f"Local video path missing for video_id={video_id}")
-
         transcript_payload = {
             "text": transcript["text"],
             "segments": json.loads(transcript["segments_json"]),
         }
-        article_payload = self.openai_service.build_article_package(video=dict(video), transcript=transcript_payload)
-        captures = self._materialize_captures(
-            Path(video["local_video_path"]),
-            video["youtube_video_id"],
-            article_payload["captures"],
-        )
+        document_body = self._format_script_body(transcript_payload["segments"], transcript_payload["text"])
 
-        article_id = self.repository.save_article(
+        document_id = self.repository.save_article(
             video_id=video_id,
-            headline=article_payload["headline"],
-            summary=article_payload["summary"],
-            body=article_payload["body"],
-            sources=article_payload["sources"],
-            captures=captures,
+            headline=video["title"],
+            summary="스크립트",
+            body=document_body,
+            sources=[
+                {
+                    "title": video["title"],
+                    "url": video["youtube_url"],
+                    "note": "원문 영상",
+                }
+            ],
+            captures=[],
             status="running",
         )
-        quality = self.qa_agent.review_article(
+        quality = self.qa_agent.review_document(
             {
-                "headline": article_payload["headline"],
-                "summary": article_payload["summary"],
-                "body": article_payload["body"],
-                "captures": captures,
-                "sources": article_payload["sources"],
+                "title": video["title"],
+                "body": document_body,
+                "source_url": video["youtube_url"],
             }
         )
-        article_status = quality.status()
+        document_status = quality.status()
         self.repository.save_article(
             video_id=video_id,
-            headline=article_payload["headline"],
-            summary=article_payload["summary"],
-            body=article_payload["body"],
-            sources=article_payload["sources"],
-            captures=captures,
-            status=article_status,
+            headline=video["title"],
+            summary="스크립트",
+            body=document_body,
+            sources=[
+                {
+                    "title": video["title"],
+                    "url": video["youtube_url"],
+                    "note": "원문 영상",
+                }
+            ],
+            captures=[],
+            status=document_status,
         )
         self.repository.save_quality_check(
-            stage="article_builder",
-            entity_type="article",
-            entity_id=article_id,
-            status=article_status,
+            stage="document_builder",
+            entity_type="document",
+            entity_id=document_id,
+            status=document_status,
             findings=[finding.to_dict() for finding in quality.findings],
             score=quality.score,
             raw_response=quality.raw_response,
         )
-        self._export_article_artifacts(
+        self._export_document_artifacts(
             youtube_video_id=video["youtube_video_id"],
-            headline=article_payload["headline"],
-            summary=article_payload["summary"],
-            body=article_payload["body"],
-            sources=article_payload["sources"],
-            captures=captures,
-            status=article_status,
+            title=video["title"],
+            body=document_body,
+            source_url=video["youtube_url"],
+            status=document_status,
         )
         if quality.passed:
             self.repository.enqueue_job(
                 job_type=JobType.PUBLISH_TEAMS.value,
-                entity_type="article",
-                entity_id=article_id,
-                dedupe_key=f"publish:{article_id}",
+                entity_type="document",
+                entity_id=document_id,
+                dedupe_key=f"publish:{document_id}",
             )
-        return article_id
+        return document_id
 
-    def _materialize_captures(self, video_path: Path, youtube_video_id: str, captures: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        capture_dir = self.config.storage_dir / youtube_video_id / "captures"
-        materialized: List[Dict[str, Any]] = []
-        for index, item in enumerate(captures, start=1):
-            output_path = capture_dir / f"capture_{index:02d}.jpg"
-            self.media_tools.capture_frame(video_path, int(item["timestamp_sec"]), output_path)
-            record = {
-                "timestamp_sec": int(item["timestamp_sec"]),
-                "note": item.get("note", ""),
-                "path": str(output_path),
-            }
-            public_url = self._public_url_for(output_path)
-            if public_url:
-                record["public_url"] = public_url
-            materialized.append(record)
-        return materialized
+    def _format_script_body(self, segments: List[Dict[str, Any]], fallback_text: str) -> str:
+        lines = [self._normalize_line(str(segment.get("text") or "")) for segment in segments]
+        cleaned_lines = [line for line in lines if line]
+        if not cleaned_lines:
+            return fallback_text.strip()
 
-    def _public_url_for(self, path: Path) -> str | None:
-        if not self.config.public_media_base_url:
-            return None
-        relative = path.relative_to(self.config.storage_dir).as_posix()
-        return f"{self.config.public_media_base_url.rstrip('/')}/{relative}"
+        paragraphs: List[str] = []
+        current: List[str] = []
+        current_length = 0
+        for line in cleaned_lines:
+            if current and (current_length + len(line) + 1 > 700):
+                paragraphs.append(" ".join(current).strip())
+                current = [line]
+                current_length = len(line)
+                continue
+            current.append(line)
+            current_length += len(line) + 1
+            if line.endswith((".", "?", "!", "다")) and current_length >= 240:
+                paragraphs.append(" ".join(current).strip())
+                current = []
+                current_length = 0
+        if current:
+            paragraphs.append(" ".join(current).strip())
+        return "\n\n".join(paragraph for paragraph in paragraphs if paragraph).strip()
 
-    def _export_article_artifacts(
+    @staticmethod
+    def _normalize_line(value: str) -> str:
+        cleaned = " ".join(value.split()).strip()
+        if cleaned.startswith(">> "):
+            cleaned = cleaned[3:].strip()
+        elif cleaned.startswith(">>"):
+            cleaned = cleaned[2:].strip()
+        if len(cleaned) < 2:
+            return ""
+        return cleaned
+
+    def _export_document_artifacts(
         self,
         *,
         youtube_video_id: str,
-        headline: str,
-        summary: str,
+        title: str,
         body: str,
-        sources: List[Dict[str, Any]],
-        captures: List[Dict[str, Any]],
+        source_url: str,
         status: str,
     ) -> None:
         base_dir = self.config.storage_dir / youtube_video_id
         markdown = "\n".join(
             [
-                f"# {headline}",
-                "",
-                summary,
+                f"# {title}",
                 "",
                 body,
+                "",
+                f"링크: {source_url}",
             ]
         ).strip() + "\n"
-        write_text(base_dir / "article.md", markdown)
+        write_text(base_dir / "script.md", markdown)
         write_json(
-            base_dir / "article.json",
+            base_dir / "script.json",
             {
-                "headline": headline,
-                "summary": summary,
+                "title": title,
                 "body": body,
-                "sources": sources,
-                "captures": captures,
+                "source_url": source_url,
                 "status": status,
             },
         )
+
+
+ArticleBuilder = DocumentBuilder

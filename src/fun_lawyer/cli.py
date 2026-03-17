@@ -12,7 +12,7 @@ from .integrations.teams import TeamsWebhookClient
 from .integrations.youtube import YouTubeClient
 from .models import JobType
 from .qa_agent import QualityAgent
-from .stages.article_builder import ArticleBuilder
+from .stages.article_builder import DocumentBuilder
 from .stages.teams_publisher import TeamsPublisher
 from .stages.transcript_worker import TranscriptWorker
 from .stages.youtube_watcher import YoutubeWatcher
@@ -34,7 +34,7 @@ def build_services(cwd=None):
         "qa_agent": qa_agent,
         "youtube_watcher": YoutubeWatcher(repository, youtube_client, qa_agent),
         "transcript_worker": TranscriptWorker(config, repository, media_tools, openai_service, qa_agent),
-        "article_builder": ArticleBuilder(config, repository, media_tools, openai_service, qa_agent),
+        "document_builder": DocumentBuilder(config, repository, media_tools, openai_service, qa_agent),
         "teams_publisher": TeamsPublisher(config, repository, teams_client, qa_agent),
     }
 
@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     scan_parser.add_argument("--max-results", type=int, default=5)
 
     run_stage = subparsers.add_parser("run-stage")
-    run_stage.add_argument("stage", choices=["transcript", "article", "publish"])
+    run_stage.add_argument("stage", choices=["transcript", "document", "article", "publish"])
 
     run_once = subparsers.add_parser("run-once")
     run_once.add_argument("--max-results", type=int, default=5)
@@ -67,8 +67,8 @@ def dispatch_job(services, job) -> None:
     try:
         if job["job_type"] == JobType.TRANSCRIBE.value:
             services["transcript_worker"].process(int(job["entity_id"]))
-        elif job["job_type"] == JobType.BUILD_ARTICLE.value:
-            services["article_builder"].process(int(job["entity_id"]))
+        elif job["job_type"] in {JobType.BUILD_DOCUMENT.value, JobType.BUILD_ARTICLE.value}:
+            services["document_builder"].process(int(job["entity_id"]))
         elif job["job_type"] == JobType.PUBLISH_TEAMS.value:
             services["teams_publisher"].process(int(job["entity_id"]))
         else:
@@ -96,11 +96,11 @@ def print_status(services) -> None:
     job_counter = Counter(job["status"] for job in repository.list_jobs())
     video_counter = Counter(video["status"] for video in repository.list_videos())
     transcript_counter = Counter(row["status"] for row in repository.list_transcripts())
-    article_counter = Counter(row["status"] for row in repository.list_articles())
+    document_counter = Counter(row["status"] for row in repository.list_articles())
     delivery_counter = Counter(row["status"] for row in repository.list_deliveries())
     print("videos:", dict(video_counter))
     print("transcripts:", dict(transcript_counter))
-    print("articles:", dict(article_counter))
+    print("documents:", dict(document_counter))
     print("deliveries:", dict(delivery_counter))
     print("jobs:", dict(job_counter))
 
@@ -136,7 +136,8 @@ def main() -> None:
     if args.command == "run-stage":
         mapping = {
             "transcript": JobType.TRANSCRIBE.value,
-            "article": JobType.BUILD_ARTICLE.value,
+            "document": JobType.BUILD_DOCUMENT.value,
+            "article": JobType.BUILD_DOCUMENT.value,
             "publish": JobType.PUBLISH_TEAMS.value,
         }
         processed = run_stage_jobs(services, mapping[args.stage])

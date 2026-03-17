@@ -72,6 +72,36 @@ class MediaToolsCommandTest(unittest.TestCase):
         self.assertEqual(subtitle_path, result)
         mock_run.assert_not_called()
 
+    def test_parse_subtitles_removes_incremental_caption_duplicates(self) -> None:
+        config = AppConfig(
+            **self.base_kwargs,
+            yt_dlp_cookies_path=None,
+            yt_dlp_cookies_from_browser=None,
+        )
+        tools = MediaTools(config)
+        subtitle_path = Path(self.temp_dir.name) / "sample.vtt"
+        subtitle_path.write_text(
+            "\n".join(
+                [
+                    "WEBVTT",
+                    "",
+                    "00:00:00.000 --> 00:00:01.000",
+                    "안녕하세요",
+                    "",
+                    "00:00:01.000 --> 00:00:02.000",
+                    "안녕하세요 반갑습니다",
+                    "",
+                    "00:00:02.000 --> 00:00:03.000",
+                    "반갑습니다 오늘 이야기합니다",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        parsed = tools.parse_subtitles(subtitle_path)
+        self.assertEqual("안녕하세요\n반갑습니다\n오늘 이야기합니다", parsed["text"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,22 +63,30 @@ class QualityAgent:
         result = self._maybe_llm_review("article", payload, findings)
         return result
 
+    def review_document(self, payload: Dict[str, Any]) -> QualityResult:
+        findings: List[QualityFinding] = []
+        title = (payload.get("title") or "").strip()
+        body = (payload.get("body") or "").strip()
+        if not title:
+            findings.append(QualityFinding(code="title_missing", message="문서 제목이 비어 있다."))
+        if not body:
+            findings.append(QualityFinding(code="body_missing", message="문서 본문이 비어 있다."))
+        if len(body) < 200:
+            findings.append(QualityFinding(code="body_too_short", message="문서 본문이 너무 짧다."))
+        if not payload.get("source_url"):
+            findings.append(QualityFinding(code="source_url_missing", message="영상 링크가 비어 있다."))
+        result = self._maybe_llm_review("document", payload, findings)
+        return result
+
     def review_delivery(self, payload: Dict[str, Any]) -> QualityResult:
         findings: List[QualityFinding] = []
-        captures = payload.get("captures") or []
         if not payload.get("webhook_url"):
             findings.append(QualityFinding(code="webhook_missing", message="Teams webhook URL이 비어 있다."))
-        if not payload.get("card"):
-            findings.append(QualityFinding(code="card_missing", message="Teams 카드 payload가 없다."))
-        if len(captures) != 3:
-            findings.append(QualityFinding(code="captures_missing", message="Teams 송출 전 캡처 3개가 준비돼야 한다."))
-        elif any(not capture.get("path") for capture in captures):
-            findings.append(
-                QualityFinding(
-                    code="capture_path_missing",
-                    message="캡처 파일 경로가 비어 있다.",
-                )
-            )
+        cards = payload.get("cards") or []
+        if not cards:
+            findings.append(QualityFinding(code="cards_missing", message="Teams 카드 payload가 없다."))
+        elif any(not card for card in cards):
+            findings.append(QualityFinding(code="card_invalid", message="비어 있는 Teams 카드가 있다."))
         result = self._maybe_llm_review("delivery", payload, findings)
         return result
 

@@ -157,6 +157,7 @@ class MediaTools:
 
     def parse_subtitles(self, subtitle_path: Path) -> Dict[str, Any]:
         segments: List[Dict[str, Any]] = []
+        transcript_chunks: List[str] = []
         lines = subtitle_path.read_text(encoding="utf-8", errors="ignore").splitlines()
         current_time: tuple[float, float] | None = None
         current_text: List[str] = []
@@ -169,13 +170,20 @@ class MediaTools:
                 return
             joined = " ".join(self._clean_caption_text(line) for line in current_text).strip()
             if joined:
+                existing_text = " ".join(transcript_chunks)
+                novel = self._extract_novel_caption_text(existing_text, joined)
+                if not novel:
+                    current_time = None
+                    current_text = []
+                    return
                 segments.append(
                     {
                         "start_sec": round(current_time[0], 3),
                         "end_sec": round(current_time[1], 3),
-                        "text": joined,
+                        "text": novel,
                     }
                 )
+                transcript_chunks.append(novel)
             current_time = None
             current_text = []
 
@@ -205,3 +213,21 @@ class MediaTools:
         stripped = re.sub(r"<[^>]+>", "", value)
         stripped = stripped.replace("&nbsp;", " ")
         return html.unescape(stripped)
+
+    @staticmethod
+    def _extract_novel_caption_text(existing_text: str, current_text: str) -> str:
+        normalized_existing = re.sub(r"\s+", " ", existing_text).strip()
+        normalized_current = re.sub(r"\s+", " ", current_text).strip()
+        if not normalized_current:
+            return ""
+        if not normalized_existing:
+            return normalized_current
+        if normalized_existing.endswith(normalized_current):
+            return ""
+
+        tail = normalized_existing[-min(len(normalized_existing), len(normalized_current) * 2) :]
+        max_overlap = min(len(tail), len(normalized_current))
+        for overlap in range(max_overlap, 0, -1):
+            if tail.endswith(normalized_current[:overlap]):
+                return normalized_current[overlap:].strip()
+        return normalized_current

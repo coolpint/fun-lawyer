@@ -1,13 +1,13 @@
 # fun-lawyer
 
-`fun-lawyer` is a modular batch pipeline for the `@lawfun_official` YouTube channel.
+`fun-lawyer` is a local batch pipeline for the `@lawfun_official` YouTube channel.
 
-The current scaffold separates the work into four workers:
+The current flow is intentionally simple:
 
 1. `youtube_watcher`: finds newly uploaded non-Shorts videos and writes `video` records.
 2. `transcript_worker`: downloads captions or audio, generates a transcript, and stores it.
-3. `article_builder`: turns the transcript into an article package with three capture frames.
-4. `teams_publisher`: sends the stored article package to a Teams incoming webhook.
+3. `document_builder`: turns the transcript into a readable script document.
+4. `teams_publisher`: sends the stored script document to a Teams incoming webhook.
 
 Each stage is reviewed by `qa_agent` before the next stage can continue. Failures stay isolated inside the stage that produced them.
 
@@ -22,7 +22,6 @@ Each stage is reviewed by `qa_agent` before the next stage can continue. Failure
    - `ffprobe`
 5. If you do not use `OPENAI_API_KEY`, install `faster-whisper`.
 6. If YouTube blocks downloads on your machine, set either `YT_DLP_COOKIES_PATH` or `YT_DLP_COOKIES_FROM_BROWSER`.
-7. If you want capture images to render inside Teams, expose `APP_STORAGE_DIR` through a public HTTPS base URL and set `APP_PUBLIC_MEDIA_BASE_URL`.
 
 ## Commands
 
@@ -48,7 +47,7 @@ Run a single stage worker:
 
 ```bash
 fun-lawyer run-stage transcript
-fun-lawyer run-stage article
+fun-lawyer run-stage document
 fun-lawyer run-stage publish
 ```
 
@@ -65,7 +64,8 @@ See `.env.example`.
 ## Notes
 
 - Default local state lives under `.data/`. GitHub 저장소를 상태 저장소로 쓰지 않는다.
-- Teams incoming webhook은 로컬 파일 경로를 직접 렌더링하지 못한다. 그래서 `APP_PUBLIC_MEDIA_BASE_URL`이 없으면 기사 본문은 전송되지만 캡처 이미지는 카드에서 생략된다.
-- 캡처 3장은 항상 로컬에 저장된다. 나중에 공개 URL만 연결하면 같은 구조로 Teams 카드에 붙일 수 있다.
-- `OPENAI_API_KEY`가 없으면 전사는 `faster-whisper`, 기사 작성은 규칙 기반 fallback으로 처리한다.
+- Teams 메시지는 기사 대신 스크립트 문서를 보낸다. 마지막에 유튜브 링크를 붙인다.
+- 긴 스크립트는 Teams payload 제한을 넘지 않도록 여러 카드로 나눠 보낸다.
+- `OPENAI_API_KEY`가 없으면 전사는 `faster-whisper` fallback으로 처리한다.
 - `YT_DLP_COOKIES_FROM_BROWSER=chrome` 같은 값으로 로컬 브라우저 쿠키를 직접 읽게 할 수 있다.
+- `launchd/com.coolpint.fun-lawyer.daily.plist`와 `scripts/run_daily.sh`를 쓰면 맥이 켜져 있을 때 하루 1회 자동 점검할 수 있다.

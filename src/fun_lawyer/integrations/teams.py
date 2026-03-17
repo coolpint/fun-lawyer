@@ -11,69 +11,76 @@ class TeamsWebhookClient:
     def __init__(self, config: AppConfig):
         self.config = config
 
-    def build_article_card(self, *, article: Dict[str, Any], video: Dict[str, Any]) -> Dict[str, Any]:
-        captures = article.get("captures") or []
-        body_blocks: List[Dict[str, Any]] = [
-            {
-                "type": "TextBlock",
-                "text": article["headline"],
-                "wrap": True,
-                "weight": "Bolder",
-                "size": "Large",
-            },
-            {
-                "type": "TextBlock",
-                "text": article.get("summary", ""),
-                "wrap": True,
-                "spacing": "Medium",
-            },
-            {
-                "type": "TextBlock",
-                "text": article["body"],
-                "wrap": True,
-                "spacing": "Medium",
-            },
-        ]
-
-        for capture in captures:
-            public_url = capture.get("public_url")
-            if not public_url:
-                continue
-            body_blocks.append(
+    def build_document_cards(self, *, document: Dict[str, Any], video: Dict[str, Any]) -> List[Dict[str, Any]]:
+        chunks = self._chunk_text(document["body"])
+        cards: List[Dict[str, Any]] = []
+        total = len(chunks)
+        for index, chunk in enumerate(chunks, start=1):
+            title = video["title"] if total == 1 else f"{video['title']} ({index}/{total})"
+            body_blocks: List[Dict[str, Any]] = [
                 {
-                    "type": "Image",
-                    "url": public_url,
-                    "altText": capture.get("note", "영상 캡처"),
-                    "size": "Stretch",
+                    "type": "TextBlock",
+                    "text": title,
+                    "wrap": True,
+                    "weight": "Bolder",
+                    "size": "Large",
+                },
+                {
+                    "type": "TextBlock",
+                    "text": chunk,
+                    "wrap": True,
                     "spacing": "Medium",
+                },
+            ]
+            if index == total:
+                body_blocks.append(
+                    {
+                        "type": "TextBlock",
+                        "text": f"링크\n{video['youtube_url']}",
+                        "wrap": True,
+                        "spacing": "Medium",
+                    }
+                )
+            cards.append(
+                {
+                    "type": "message",
+                    "attachments": [
+                        {
+                            "contentType": "application/vnd.microsoft.card.adaptive",
+                            "content": {
+                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                "type": "AdaptiveCard",
+                                "version": "1.4",
+                                "msteams": {"width": "Full"},
+                                "body": body_blocks,
+                            },
+                        }
+                    ],
                 }
             )
+        return cards
 
-        body_blocks.append(
-            {
-                "type": "FactSet",
-                "facts": [
-                    {"title": "영상", "value": video["title"]},
-                    {"title": "링크", "value": video["youtube_url"]},
-                ],
-            }
-        )
+    @staticmethod
+    def _chunk_text(text: str, max_chars: int = 2200) -> List[str]:
+        paragraphs = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
+        if not paragraphs:
+            return [text.strip() or "(빈 스크립트)"]
 
-        return {
-            "type": "message",
-            "attachments": [
-                {
-                    "contentType": "application/vnd.microsoft.card.adaptive",
-                    "content": {
-                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                        "type": "AdaptiveCard",
-                        "version": "1.4",
-                        "msteams": {"width": "Full"},
-                        "body": body_blocks,
-                    },
-                }
-            ],
-        }
+        chunks: List[str] = []
+        current: List[str] = []
+        current_length = 0
+        for paragraph in paragraphs:
+            paragraph_length = len(paragraph)
+            if current and current_length + paragraph_length + 2 > max_chars:
+                chunks.append("\n\n".join(current))
+                current = [paragraph]
+                current_length = paragraph_length
+                continue
+            current.append(paragraph)
+            current_length += paragraph_length + (2 if current_length else 0)
+        if current:
+            chunks.append("\n\n".join(current))
+        return chunks
 
     def post(self, payload: Dict[str, Any]) -> str:
         webhook_url = self.config.require("teams_webhook_url")

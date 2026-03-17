@@ -89,10 +89,10 @@ class TranscriptWorker:
         )
         if quality.passed:
             self.repository.enqueue_job(
-                job_type=JobType.BUILD_ARTICLE.value,
+                job_type=JobType.BUILD_DOCUMENT.value,
                 entity_type="video",
                 entity_id=video_id,
-                dedupe_key=f"article:{video_id}",
+                dedupe_key=f"document:{video_id}",
             )
         return transcript_id
 
