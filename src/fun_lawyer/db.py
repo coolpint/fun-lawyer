@@ -481,6 +481,41 @@ class Repository:
             )
             return conn.execute("SELECT * FROM jobs WHERE id = ?", (row["id"],)).fetchone()
 
+    def recover_stale_jobs(self, stale_after_seconds: int = 3600) -> list[dict[str, Any]]:
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)).isoformat()
+        now = utc_now()
+        recovered: list[dict[str, Any]] = []
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM jobs
+                WHERE status = 'running' AND locked_at IS NOT NULL AND locked_at <= ?
+                ORDER BY locked_at ASC, id ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+            for row in rows:
+                recovered.append(
+                    {
+                        "id": int(row["id"]),
+                        "job_type": str(row["job_type"]),
+                        "entity_id": int(row["entity_id"]),
+                    }
+                )
+                message = "Recovered stale running job."
+                if row["last_error"]:
+                    message = f"{row['last_error']}\n{message}"
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'pending', last_error = ?, next_run_at = ?, updated_at = ?,
+                        lock_token = NULL, locked_at = NULL
+                    WHERE id = ?
+                    """,
+                    (message, now, now, row["id"]),
+                )
+        return recovered
+
     def complete_job(self, job_id: int) -> None:
         with self.connect() as conn:
             conn.execute(

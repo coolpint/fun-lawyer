@@ -11,6 +11,41 @@ class TeamsWebhookClient:
     def __init__(self, config: AppConfig):
         self.config = config
 
+    def build_status_card(self, *, title: str, lines: List[str]) -> Dict[str, Any]:
+        body_blocks: List[Dict[str, Any]] = [
+            {
+                "type": "TextBlock",
+                "text": title,
+                "wrap": True,
+                "weight": "Bolder",
+                "size": "Large",
+            }
+        ]
+        for line in lines:
+            body_blocks.append(
+                {
+                    "type": "TextBlock",
+                    "text": line,
+                    "wrap": True,
+                    "spacing": "Medium",
+                }
+            )
+        return {
+            "type": "message",
+            "attachments": [
+                {
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": {
+                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                        "type": "AdaptiveCard",
+                        "version": "1.4",
+                        "msteams": {"width": "Full"},
+                        "body": body_blocks,
+                    },
+                }
+            ],
+        }
+
     def build_document_cards(self, *, document: Dict[str, Any], video: Dict[str, Any]) -> List[Dict[str, Any]]:
         chunks = self._chunk_text(document["body"])
         cards: List[Dict[str, Any]] = []

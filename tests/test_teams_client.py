@@ -49,6 +49,13 @@ class TeamsWebhookClientTest(unittest.TestCase):
         last_body = payloads[-1]["attachments"][0]["content"]["body"]
         self.assertIn("링크\nhttps://www.youtube.com/watch?v=abc123", last_body[-1]["text"])
 
+    def test_build_status_card_renders_all_lines(self) -> None:
+        payload = self.client.build_status_card(title="경고", lines=["첫 줄", "둘째 줄"])
+        body = payload["attachments"][0]["content"]["body"]
+        self.assertEqual("경고", body[0]["text"])
+        self.assertEqual("첫 줄", body[1]["text"])
+        self.assertEqual("둘째 줄", body[2]["text"])
+
 
 if __name__ == "__main__":
     unittest.main()

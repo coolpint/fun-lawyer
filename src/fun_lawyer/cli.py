@@ -74,21 +74,32 @@ def dispatch_job(services, job) -> None:
         else:
             raise RuntimeError(f"Unsupported job type: {job['job_type']}")
         repository.complete_job(int(job["id"]))
+        return None
     except Exception as exc:
         repository.fail_job(int(job["id"]), str(exc))
         print(f"job {job['id']} failed: {exc}")
+        return {
+            "job_id": int(job["id"]),
+            "job_type": str(job["job_type"]),
+            "entity_id": int(job["entity_id"]),
+            "error": str(exc),
+        }
 
 
-def run_stage_jobs(services, job_type: str) -> int:
+def run_stage_jobs(services, job_type: str) -> tuple[int, list[dict], list[dict]]:
     repository = services["repository"]
+    recovered = repository.recover_stale_jobs()
     processed = 0
+    failures: list[dict] = []
     while True:
         job = repository.claim_next_job(job_type)
         if not job:
             break
-        dispatch_job(services, job)
+        failure = dispatch_job(services, job)
+        if failure:
+            failures.append(failure)
         processed += 1
-    return processed
+    return processed, failures, recovered
 
 
 def print_status(services) -> None:
@@ -105,17 +116,61 @@ def print_status(services) -> None:
     print("jobs:", dict(job_counter))
 
 
-def run_once_cycle(services, max_results: int) -> tuple[int, int]:
+def notify_run_issues(services, failures: list[dict], recovered: list[dict]) -> None:
+    if not failures and not recovered:
+        return
+    config = services["config"]
+    if not config.teams_webhook_url:
+        return
+
+    lines: list[str] = []
+    if recovered:
+        lines.append(f"복구된 작업 {len(recovered)}건")
+        for item in recovered[:10]:
+            lines.append(f"- job {item['id']} / {item['job_type']} / entity {item['entity_id']}")
+    if failures:
+        lines.append(f"실패한 작업 {len(failures)}건")
+        for item in failures[:10]:
+            lines.append(f"- job {item['job_id']} / {item['job_type']} / {item['error']}")
+
+    payload = services["teams_publisher"].teams_client.build_status_card(
+        title="fun-lawyer 실행 경고",
+        lines=lines,
+    )
+    try:
+        services["teams_publisher"].teams_client.post(payload)
+    except Exception as exc:  # pragma: no cover
+        print(f"warning: failed to post run issues to Teams: {exc}")
+
+
+def run_once_cycle(services, max_results: int) -> tuple[int, int, list[dict], list[dict]]:
     repository = services["repository"]
-    created = services["youtube_watcher"].scan(max_results=max_results)
+    recovered = repository.recover_stale_jobs()
+    failures: list[dict] = []
+    try:
+        created = services["youtube_watcher"].scan(max_results=max_results)
+    except Exception as exc:
+        created = 0
+        failures.append(
+            {
+                "job_id": 0,
+                "job_type": "scan_youtube",
+                "entity_id": 0,
+                "error": str(exc),
+            }
+        )
+        print(f"scan failed: {exc}")
     processed = 0
     while True:
         job = repository.claim_next_job()
         if not job:
             break
-        dispatch_job(services, job)
+        failure = dispatch_job(services, job)
+        if failure:
+            failures.append(failure)
         processed += 1
-    return created, processed
+    notify_run_issues(services, failures, recovered)
+    return created, processed, failures, recovered
 
 
 def main() -> None:
@@ -140,19 +195,20 @@ def main() -> None:
             "article": JobType.BUILD_DOCUMENT.value,
             "publish": JobType.PUBLISH_TEAMS.value,
         }
-        processed = run_stage_jobs(services, mapping[args.stage])
+        processed, failures, recovered = run_stage_jobs(services, mapping[args.stage])
+        notify_run_issues(services, failures, recovered)
         print(f"processed {processed} jobs")
         return
 
     if args.command == "run-once":
-        created, processed = run_once_cycle(services, args.max_results)
+        created, processed, _failures, _recovered = run_once_cycle(services, args.max_results)
         print(f"queued {created} new videos and processed {processed} jobs")
         return
 
     if args.command == "run-loop":
         try:
             while True:
-                created, processed = run_once_cycle(services, args.max_results)
+                created, processed, _failures, _recovered = run_once_cycle(services, args.max_results)
                 print(f"queued {created} new videos and processed {processed} jobs")
                 time.sleep(args.interval_sec)
         except KeyboardInterrupt:

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fun_lawyer.db import Repository
@@ -103,6 +104,41 @@ class RepositoryTest(unittest.TestCase):
         self.assertEqual(1, len(list(self.repository.list_transcripts())))
         self.assertEqual(1, len(list(self.repository.list_articles())))
         self.assertEqual(1, len(list(self.repository.list_deliveries())))
+
+    def test_recover_stale_jobs_requeues_running_job(self) -> None:
+        video_id = self.repository.upsert_video(
+            youtube_video_id="video-stale",
+            channel_handle="@lawfun_official",
+            title="샘플 영상",
+            youtube_url="https://www.youtube.com/watch?v=video-stale",
+            published_at="2026-03-12T00:00:00Z",
+            duration_sec=420,
+            is_short=False,
+            raw_json={"id": "video-stale"},
+            status="pending",
+        )
+        job_id = self.repository.enqueue_job(
+            job_type="transcribe",
+            entity_type="video",
+            entity_id=video_id,
+            dedupe_key=f"transcribe:{video_id}",
+        )
+        stale_locked_at = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        with self.repository.connect() as conn:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status = 'running', locked_at = ?, lock_token = 'token', updated_at = ?
+                WHERE id = ?
+                """,
+                (stale_locked_at, stale_locked_at, job_id),
+            )
+
+        recovered = self.repository.recover_stale_jobs(stale_after_seconds=60)
+        self.assertEqual(1, len(recovered))
+        jobs = list(self.repository.list_jobs())
+        self.assertEqual("pending", jobs[0]["status"])
+        self.assertIn("Recovered stale running job.", jobs[0]["last_error"])
 
 
 if __name__ == "__main__":
